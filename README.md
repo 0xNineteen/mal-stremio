@@ -101,7 +101,12 @@ npm run dev     # auto-reload on file changes (Node 22+)
 
 ### Environment Variables
 
-The only supported environment variable is `PORT` (defaults to `3001`). No API keys or secrets are required.
+- `PORT` — HTTP server port (default: 3001)
+- `NODE_ENV=production` — Enables production mode:
+  - Season data is cached for **1 month** before re-scraping MyAnimeList.
+  - HTTP cache headers are set to 1 hour (instead of 5 seconds).
+
+No API keys or secrets are required.
 
 All IMDb IDs are resolved using the `name-to-imdb` package + titles scraped from MyAnimeList.
 

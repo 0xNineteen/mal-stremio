@@ -3,8 +3,12 @@ const cheerio = require('cheerio');
 
 // ====================== CONFIG ======================
 const PORT = 3001;
-const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const CACHE_TTL_MS = IS_PRODUCTION 
+  ? 30 * 24 * 60 * 60 * 1000   // 30 days (1 month) in production before re-scraping MAL
+  : 4 * 60 * 60 * 1000;        // 4 hours in development
 const IMDB_CACHE_FILE = './data/imdb-cache.json';
+const HTTP_CACHE_MAX_AGE = IS_PRODUCTION ? 3600 : 5; // 1 hour in prod, 5s in dev (for fast iteration)
 
 // ====================== MANIFEST ======================
 const manifest = {
@@ -19,6 +23,8 @@ const manifest = {
 };
 
 // ====================== CACHE ======================
+// Data cache TTL is 1 month in production (IS_PRODUCTION), 4 hours in development.
+// See CONFIG section above.
 
 // New general cache for all seasons: key = `${year}-${season}-${'popular'|'rated'}`
 const seasonDataCache = new Map();
@@ -750,7 +756,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
 // ====================== SERVER ======================
 serveHTTP(builder.getInterface(), {
   port: PORT,
-  cacheMaxAge: 5 // Very low cache for fast iteration during development
+  cacheMaxAge: HTTP_CACHE_MAX_AGE
 }).then(async ({ url }) => {
   const timestampedManifest = `${url}?t=${Date.now()}`;
 
