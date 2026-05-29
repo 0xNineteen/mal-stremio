@@ -2,7 +2,7 @@ const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const cheerio = require('cheerio');
 
 // ====================== CONFIG ======================
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const CACHE_TTL_MS = IS_PRODUCTION 
   ? 30 * 24 * 60 * 60 * 1000   // 30 days (1 month) in production before re-scraping MAL
@@ -804,14 +804,6 @@ serveHTTP(builder.getInterface(), {
       await new Promise(r => setTimeout(r, 350));
     }
   })();
-
-  // Background refresh every 6 hours (highest rated for recent seasons)
-  setInterval(() => {
-    const recent = ALL_SEASONS.slice(0, 6);
-    recent.forEach(s => {
-      getSeasonData(s.year, s.season, 'rated').catch(() => {});
-    });
-  }, 6 * 60 * 60 * 1000);
 }).catch(err => {
   console.error('Failed to start server:', err);
   process.exit(1);
