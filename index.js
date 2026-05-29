@@ -3,10 +3,6 @@ require('dotenv').config();
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const cheerio = require('cheerio');
 
-// ====================== CONFIG ======================
-// MAL_CLIENT_ID is not required (we scrape the website directly)
-const MAL_CLIENT_ID = process.env.MAL_CLIENT_ID; // kept for future use if needed
-
 // ====================== MANIFEST ======================
 const manifest = {
   id: 'com.malstremio.seasonal',
@@ -24,128 +20,6 @@ const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 // New general cache for all seasons: key = `${year}-${season}-${'popular'|'rated'}`
 const seasonDataCache = new Map();
-
-// ====================== MOCK FALLBACK DATA (used only if Jikan is unreachable) ======================
-const MOCK_SEASONAL = [
-  {
-    mal_id: 52991,
-    title: "Solo Leveling Season 2",
-    title_english: "Solo Leveling Season 2: Arise from the Shadow",
-    images: { jpg: { large_image_url: "https://cdn.myanimelist.net/images/anime/1999/151314l.jpg" } },
-    synopsis: "Jinwoo Sung continues his journey as a Shadow Monarch in the second season of the massively popular action series.",
-    score: 8.72,
-    popularity: 42,
-    genres: [{ name: "Action" }, { name: "Fantasy" }],
-    year: 2025,
-    season: "winter",
-    status: "Currently Airing",
-    duration: "23 min per ep",
-    url: "https://myanimelist.net/anime/52991"
-  },
-  {
-    mal_id: 53887,
-    title: "Mushoku Tensei II",
-    title_english: "Mushoku Tensei: Jobless Reincarnation Season 2 Part 2",
-    images: { jpg: { large_image_url: "https://cdn.myanimelist.net/images/anime/1829/145386l.jpg" } },
-    synopsis: "Rudeus continues his new life in a fantasy world with his growing family and powerful magic.",
-    score: 8.45,
-    popularity: 118,
-    genres: [{ name: "Drama" }, { name: "Fantasy" }, { name: "Ecchi" }],
-    year: 2024,
-    season: "spring",
-    status: "Finished Airing",
-    duration: "23 min per ep",
-    url: "https://myanimelist.net/anime/53887"
-  },
-  {
-    mal_id: 51019,
-    title: "Frieren: Beyond Journey's End",
-    title_english: "Frieren: Beyond Journey's End",
-    images: { jpg: { large_image_url: "https://cdn.myanimelist.net/images/anime/1015/138006l.jpg" } },
-    synopsis: "An elf mage reflects on life and loss after the defeat of the Demon King in this critically acclaimed fantasy.",
-    score: 9.35,
-    popularity: 58,
-    genres: [{ name: "Drama" }, { name: "Fantasy" }, { name: "Adventure" }],
-    year: 2023,
-    season: "fall",
-    status: "Finished Airing",
-    duration: "24 min per ep",
-    url: "https://myanimelist.net/anime/51019"
-  },
-  {
-    mal_id: 56955,
-    title: "Kaiju No. 8",
-    title_english: "Kaiju No. 8",
-    images: { jpg: { large_image_url: "https://cdn.myanimelist.net/images/anime/1973/142401l.jpg" } },
-    synopsis: "A man in his 30s joins the Defense Force after gaining the ability to turn into a kaiju.",
-    score: 8.25,
-    popularity: 95,
-    genres: [{ name: "Action" }, { name: "Sci-Fi" }],
-    year: 2024,
-    season: "spring",
-    status: "Finished Airing",
-    duration: "23 min per ep",
-    url: "https://myanimelist.net/anime/56955"
-  },
-  {
-    mal_id: 58514,
-    title: "Witch Watch",
-    title_english: "Witch Watch",
-    images: { jpg: { large_image_url: "https://cdn.myanimelist.net/images/anime/1651/147158l.jpg" } },
-    synopsis: "A witch in training moves in with her childhood friend as she learns to control her powers.",
-    score: 7.65,
-    popularity: 312,
-    genres: [{ name: "Comedy" }, { name: "Romance" }, { name: "Supernatural" }],
-    year: 2025,
-    season: "spring",
-    status: "Currently Airing",
-    duration: "24 min per ep",
-    url: "https://myanimelist.net/anime/58514"
-  }
-];
-
-// ====================== API RATE LIMITER ======================
-// Basic polite rate limiting for external APIs (MAL, etc.)
-// - 2 requests per second
-// - 30 requests per minute
-class ApiRateLimiter {
-  constructor() {
-    this.requests = []; // timestamps in ms
-    this.MAX_PER_SECOND = 2;
-    this.MAX_PER_MINUTE = 30;
-  }
-
-  async wait() {
-    let now = Date.now();
-
-    // Drop timestamps older than 60 seconds
-    this.requests = this.requests.filter(t => now - t < 60000);
-
-    // Enforce 30 requests per minute (sliding window)
-    while (this.requests.length >= this.MAX_PER_MINUTE) {
-      const oldest = this.requests[0];
-      const waitMs = 60000 - (now - oldest) + 25;
-      if (waitMs > 0) {
-        await new Promise(r => setTimeout(r, waitMs));
-      }
-      now = Date.now();
-      this.requests = this.requests.filter(t => now - t < 60000);
-    }
-
-    // Enforce 2 requests per second (sliding window)
-    const inLastSecond = this.requests.filter(t => now - t < 1000);
-    if (inLastSecond.length >= this.MAX_PER_SECOND) {
-      const waitMs = 1000 - (now - inLastSecond[0]) + 25;
-      if (waitMs > 0) {
-        await new Promise(r => setTimeout(r, waitMs));
-      }
-    }
-
-    this.requests.push(Date.now());
-  }
-}
-
-const apiRateLimiter = new ApiRateLimiter();
 
 // ====================== SEASON UTILITIES ======================
 const SEASONS = ['winter', 'spring', 'summer', 'fall'];
@@ -537,57 +411,6 @@ function prepareCatalog(rawList, catalogId, searchTerm = '', skip = 0, pageSize 
   return page.map(toMetaPreview).filter(Boolean);
 }
 
-// Resilient fetch with retries (handles 429 + 5xx). Used for Official MAL API (and previously Jikan).
-async function resilientFetch(url, options = {}, maxRetries = 4) {
-  let lastErr;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    // Basic rate limiting before every request (polite to external APIs)
-    await apiRateLimiter.wait();
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    try {
-      const res = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'mal-stremio-addon/1.0 (github.com/x19/mal-stremio)',
-          'Accept': 'application/json',
-          ...(options.headers || {})
-        }
-      });
-      clearTimeout(timeout);
-
-      if (res.ok) {
-        return res;
-      }
-
-      // Retry on rate limit or server errors
-      if (res.status === 429 || res.status >= 500) {
-        const backoff = Math.min(1000 * Math.pow(2, attempt), 8000) + Math.random() * 400;
-        console.warn(`[API] ${res.status} on ${url.split('?')[0]} (attempt ${attempt + 1}/${maxRetries + 1}). Backing off ${Math.round(backoff)}ms`);
-        await new Promise(r => setTimeout(r, backoff));
-        lastErr = new Error(`HTTP ${res.status}`);
-        continue;
-      }
-
-      // Non-retryable error
-      return res;
-    } catch (err) {
-      clearTimeout(timeout);
-      lastErr = err;
-      if (attempt < maxRetries) {
-        const backoff = 600 * Math.pow(1.7, attempt);
-        await new Promise(r => setTimeout(r, backoff));
-      }
-    }
-  }
-
-  throw lastErr || new Error('All retries failed');
-}
-
 /**
  * Scrape the first page of a MAL seasonal anime page.
  * Done slowly and respectfully.
@@ -939,7 +762,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
 });
 
 // Note: This addon intentionally does NOT implement a stream handler.
-// It only provides catalogs and metadata using raw `tt` (IMDb) IDs resolved from MAL page external links.
+// It only provides catalogs and metadata using raw `tt` (IMDb) IDs (resolved via name-to-imdb + MAL titles).
 // Pair with Torrentio (or AIOStreams/MediaFusion) for streams.
 
 // ====================== SERVER ======================
@@ -960,7 +783,7 @@ serveHTTP(builder.getInterface(), {
   console.log(`  Manifest URL (recommended): ${timestampedManifest}`);
   console.log('');
 
-  // Load any previously Google-resolved IMDb IDs from disk cache
+  // Load cached IMDb ID resolutions
   const fs = require('fs');
   const path = require('path');
   const cachePath = path.join(__dirname, 'data', 'imdb-cache.json');
@@ -971,7 +794,7 @@ serveHTTP(builder.getInterface(), {
       cachedCount = Object.keys(cache).length;
     }
   } catch (_) {}
-  console.log(`  IMDb cache: ${cachedCount} title(s) pre-resolved via Google`);
+  console.log(`  IMDb cache: ${cachedCount} title(s) pre-resolved`);
 
   console.log('  Catalogs provided:');
   console.log(`    • ${fullManifest.catalogs.length} total`);

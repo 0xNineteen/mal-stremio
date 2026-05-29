@@ -6,14 +6,13 @@
  * (see Stremio Addon SDK docs).
  *
  * Usage:
- *   node scripts/resolve-imdb-google.js "Solo Leveling Season 2"
- *   node scripts/resolve-imdb-google.js "Re:Zero 4th Season" "Witch Watch"
+ *   node scripts/resolve-imdb-id.js "Solo Leveling Season 2"
+ *   node scripts/resolve-imdb-id.js "Re:Zero 4th Season" "Witch Watch"
  *
  * Strips season/part info first for better accuracy on anime.
  * Results saved to data/imdb-cache.json.
  */
 
-const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
 
@@ -137,31 +136,3 @@ async function searchForImdbId(title) {
     });
   });
 }
-
-async function main() {
-  const titles = process.argv.slice(2);
-
-  if (titles.length === 0) {
-    console.log('Usage:');
-    console.log('  node scripts/resolve-imdb-google.js "Title One" "Title Two"');
-    console.log('');
-    console.log('Example:');
-    console.log('  node scripts/resolve-imdb-google.js "Solo Leveling Season 2" "Re:Zero 4th Season"');
-    process.exit(1);
-  }
-
-  console.log(`Resolving ${titles.length} title(s) via Google...\n`);
-
-  for (const title of titles) {
-    await googleSearchForImdbId(title);
-    // Extra safety delay between different titles
-    await sleep(3000);
-  }
-
-  console.log('\nDone. Results saved to data/imdb-cache.json');
-}
-
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
