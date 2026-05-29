@@ -1,0 +1,32 @@
+{
+  "name": "mal-stremio",
+  "version": "1.0.0",
+  "description": "Stremio addon that shows the top seasonal anime from MyAnimeList (via Jikan API)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "stremio",
+    "stremio-addon",
+    "anime",
+    "myanimelist",
+    "mal",
+    "seasonal",
+    "jikan"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "dotenv": "^17.4.2",
+    "name-to-imdb": "^2.3.2",
+    "stremio-addon-sdk": "^1.6.10"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
