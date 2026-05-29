@@ -1,7 +1,10 @@
-require('dotenv').config();
-
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const cheerio = require('cheerio');
+
+// ====================== CONFIG ======================
+const PORT = 3001;
+const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const IMDB_CACHE_FILE = './data/imdb-cache.json';
 
 // ====================== MANIFEST ======================
 const manifest = {
@@ -16,7 +19,6 @@ const manifest = {
 };
 
 // ====================== CACHE ======================
-const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 // New general cache for all seasons: key = `${year}-${season}-${'popular'|'rated'}`
 const seasonDataCache = new Map();
@@ -159,10 +161,6 @@ async function fetchMalPageInfo(malId) {
       if (regexMatch) imdbId = regexMatch[1].startsWith('tt') ? regexMatch[1] : `tt${regexMatch[1]}`;
     }
 
-    if (imdbId) {
-      console.log(`[mal] Found IMDb link on MAL page for mal:${malId} → ${imdbId}`);
-    }
-
     // === 2. Extract English title from Alternative Titles section ===
     let englishTitle = null;
 
@@ -198,10 +196,6 @@ async function fetchMalPageInfo(malId) {
       });
     }
 
-    if (englishTitle) {
-      console.log(`[mal] English title from Alternative Titles for mal:${malId} → "${englishTitle}"`);
-    }
-
     // === 3. Also extract Japanese title (very useful for search engines on anime)
     let japaneseTitle = null;
     $('.js-alternative-titles .spaceit_pad, .alternative-titles .spaceit_pad').each((i, el) => {
@@ -221,10 +215,6 @@ async function fetchMalPageInfo(malId) {
         const match = txt.match(/Japanese:\s*(.+)/i);
         if (match && match[1]) japaneseTitle = match[1].trim();
       });
-    }
-
-    if (japaneseTitle) {
-      console.log(`[mal] Japanese title from Alternative Titles for mal:${malId} → "${japaneseTitle}"`);
     }
 
     return { imdbId, englishTitle, japaneseTitle };
@@ -324,8 +314,6 @@ async function searchForImdbId(title) {
       }
 
       if (res && /^tt\d+$/.test(res)) {
-        console.log(`[name-to-imdb] Resolved "${title}" → ${res} (searched as "${cleanTitle}")`);
-
         // Prefer saving the cleaned title. The save function will prevent
         // duplicate tt IDs from being stored under multiple names.
         saveToImdbCache(cleanTitle || title, res);
@@ -333,14 +321,10 @@ async function searchForImdbId(title) {
         return resolve(res);
       }
 
-      console.log(`[name-to-imdb] No result for "${cleanTitle}"`);
       resolve(null);
     });
   });
 }
-
-// Simple persistent cache for name-to-imdb resolutions (keyed by original and cleaned titles)
-const IMDB_CACHE_FILE = './data/imdb-cache.json';
 
 function loadImdbCache() {
   try {
@@ -418,8 +402,6 @@ function prepareCatalog(rawList, catalogId, searchTerm = '', skip = 0, pageSize 
  */
 async function scrapeMalSeasonalPage(year, season) {
   const url = `https://myanimelist.net/anime/season/${year}/${season}`;
-
-  console.log(`[scrape] Fetching ${url} (slow mode)`);
 
   // Be very polite to MAL
   await new Promise(resolve => setTimeout(resolve, 1500));
@@ -541,44 +523,52 @@ async function getSeasonData(year, season, sort = 'rated') {
   try {
     let scraped = await scrapeMalSeasonalPage(year, season);
 
-    // Resolve tt (IMDb) IDs using a single MAL page request per title:
-    // - First try to get the IMDb ID directly from "External Links"
-    // - Also extract the English (and Japanese) title from the "Alternative Titles" section
-    // - Use name-to-imdb (official Stremio recommendation) on the cleaned title
-    //   (we strip season/part info first for much better results)
+    // Resolve tt (IMDb) IDs using a single MAL page request per title.
+    // Progress bar for the season's title enrichment.
+    const total = scraped.length;
+    let processed = 0;
+    const seasonLabel = `${SEASON_DISPLAY[season]} ${year}`;
+
     const resolved = [];
-    for (const item of scraped) {
-      if (!item.mal_id) continue;
+    if (total > 0) {
+      for (const item of scraped) {
+        processed++;
+        const percent = Math.floor((processed / total) * 100);
+        const barLen = 20;
+        const filled = Math.floor((processed / total) * barLen);
+        const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
+        process.stdout.write(`\r[${bar}] ${processed}/${total} (${percent}%) ${seasonLabel}`);
 
-      const { imdbId: malImdb, englishTitle, japaneseTitle } = await fetchMalPageInfo(item.mal_id);
+        if (!item.mal_id) continue;
 
-      let finalImdbId = malImdb;
+        const { imdbId: malImdb, englishTitle, japaneseTitle } = await fetchMalPageInfo(item.mal_id);
 
-      if (!finalImdbId) {
-        // Use the best titles we have from MAL Alternative Titles.
-        // Try direct IMDb search first (as requested), then reliable external search.
-        const candidates = [
-          englishTitle,
-          japaneseTitle,
-          item.title_english,
-          item.title
-        ].filter(Boolean);
+        let finalImdbId = malImdb;
 
-        for (const rawTitle of candidates) {
-          if (finalImdbId) break;
+        if (!finalImdbId) {
+          const candidates = [
+            englishTitle,
+            japaneseTitle,
+            item.title_english,
+            item.title
+          ].filter(Boolean);
 
-          // Only use DuckDuckGo results now (no direct IMDb site requests).
-          // We parse the tt ID from the actual result hrefs.
-          finalImdbId = await searchForImdbId(rawTitle);
+          for (const rawTitle of candidates) {
+            if (finalImdbId) break;
+
+            finalImdbId = await searchForImdbId(rawTitle);
+          }
+        }
+
+        if (finalImdbId) {
+          item.imdb_id = finalImdbId;
+          resolved.push(item);
+        } else {
+          console.error(`[error] Could not resolve IMDb ID for mal:${item.mal_id} — "${item.title}" — dropping`);
         }
       }
 
-      if (finalImdbId) {
-        item.imdb_id = finalImdbId;
-        resolved.push(item);
-      } else {
-        console.log(`[imdb] Could not resolve IMDb ID for mal:${item.mal_id} — "${item.title}" — dropping`);
-      }
+      process.stdout.write('\n');
     }
 
     scraped = resolved;
@@ -592,11 +582,6 @@ async function getSeasonData(year, season, sort = 'rated') {
       });
     }
 
-    // Debug log for Winter 2026 sorting issues
-    if (year === 2026 && season === 'winter') {
-      console.log(`[debug] Winter 2026 scores after sort:`, scraped.slice(0, 5).map(s => ({ title: s.title, score: s.score })));
-    }
-
     // Cap at 25
     const finalData = scraped.slice(0, 25);
 
@@ -606,9 +591,8 @@ async function getSeasonData(year, season, sort = 'rated') {
       info: `${SEASON_DISPLAY[season]} ${year} (${sort})`
     });
 
-    console.log(`[cache] Loaded ${finalData.length} titles → ${SEASON_DISPLAY[season]} ${year} [${sort}] (scraped)`);
     if (finalData.length === 0) {
-      console.warn(`[scrape] Got 0 titles for ${season} ${year} after processing. This season may have no TV entries yet on the first page, or scraping failed silently.`);
+      console.warn(`[scrape] Got 0 titles for ${season} ${year} after processing.`);
     }
     return finalData;
 
@@ -616,12 +600,10 @@ async function getSeasonData(year, season, sort = 'rated') {
     console.error(`[scrape] Failed ${year}-${season} (${sort}):`, err.message);
 
     if (cached && cached.data.length > 0) {
-      console.log(`[cache] Serving stale data for ${cacheKey}`);
       return cached.data;
     }
 
     if (seasonDataCache.size === 0) {
-      console.log('[cache] Falling back to mock data');
       const mockKey = 'mock-popular';
       seasonDataCache.set(mockKey, {
         data: MOCK_SEASONAL,
@@ -663,7 +645,7 @@ const fullManifest = {
   catalogs: buildCatalogs()
 };
 
-console.log(`[manifest] Generated ${fullManifest.catalogs.length} catalogs using tt (IMDb) IDs resolved from MAL external links (highest rated only)`);
+
 
 // ====================== ADDON HANDLERS ======================
 const builder = new addonBuilder(fullManifest);
@@ -766,10 +748,8 @@ builder.defineMetaHandler(async ({ type, id }) => {
 // Pair with Torrentio (or AIOStreams/MediaFusion) for streams.
 
 // ====================== SERVER ======================
-const port = process.env.PORT || 3001;
-
 serveHTTP(builder.getInterface(), {
-  port,
+  port: PORT,
   cacheMaxAge: 5 // Very low cache for fast iteration during development
 }).then(async ({ url }) => {
   const timestampedManifest = `${url}?t=${Date.now()}`;
@@ -812,14 +792,11 @@ serveHTTP(builder.getInterface(), {
 
   // Preload seasons by scraping MAL website slowly (one request every ~4.5s)
   const eagerSeasons = ALL_SEASONS.slice(0, 6);
-  console.log(`[startup] Preloading ${eagerSeasons.length} recent seasons (highest rated) sequentially...`);
-
   (async () => {
     for (const s of eagerSeasons) {
       await getSeasonData(s.year, s.season, 'rated').catch(() => {});
       await new Promise(r => setTimeout(r, 350));
     }
-    console.log(`[startup] Recent seasons preloaded. Cached entries: ${seasonDataCache.size}`);
   })();
 
   // Background refresh every 6 hours (highest rated for recent seasons)

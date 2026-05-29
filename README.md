@@ -17,7 +17,6 @@ This addon provides catalogs and metadata only. Pair it with Torrentio (or simil
   - All support search + pagination
 - Rich metadata pages (synopsis, genres, MAL score, trailers when available, direct MAL link)
 - Polite rate limiting + retries + on-demand loading for older seasons
-- SFW only
 - Uses only raw `tt` (IMDb) IDs — e.g. `tt1234567` (idPrefixes: ["tt"])
 - IMDb IDs are resolved live by scraping each anime's MyAnimeList page and extracting the link from the "External Links" section.
 - Only titles that have a public IMDb entry linked on MAL are included (this means some seasons will have fewer than 25 titles).
@@ -31,7 +30,6 @@ This addon provides catalogs and metadata only. Pair it with Torrentio (or simil
 git clone https://github.com/yourname/mal-stremio.git
 cd mal-stremio
 npm install
-cp .env.example .env
 npm start
 ```
 
@@ -93,7 +91,7 @@ Because we use standard IMDb IDs (resolved from MAL), compatibility with Torrent
 | Caching          | Per-season, 4h TTL + on-demand loading              |
 | Rate limit       | Polite client-side limiting                         |
 | Authentication   | None (public scraping with delays)                  |
-| ID scheme        | Raw `tt` (IMDb) only. Resolved in two stages: 1) MAL page "External Links", 2) Google search fallback (`title + imdb`) for popular titles without a direct link. Results cached to `data/imdb-cache.json`. |
+| ID scheme        | Raw `tt` (IMDb) IDs only. Resolved using `name-to-imdb` (official Stremio recommendation) + titles from MAL pages. Cached locally in `data/imdb-cache.json`. |
 
 ## Development
 
@@ -103,11 +101,9 @@ npm run dev     # auto-reload on file changes (Node 22+)
 
 ### Environment Variables
 
-| Variable | Default | Description                                      |
-|----------|---------|--------------------------------------------------|
-| `PORT`   | 3001    | HTTP server port                                 |
+The only supported environment variable is `PORT` (defaults to `3001`). No API keys or secrets are required.
 
-No external API keys are required. All IMDb IDs are discovered by scraping public MyAnimeList pages.
+All IMDb IDs are resolved using the `name-to-imdb` package + titles scraped from MyAnimeList.
 
 ## Why "Highest Rated Seasonal"?
 
