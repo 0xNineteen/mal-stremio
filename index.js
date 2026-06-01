@@ -75,7 +75,7 @@ function getRecentSeasons(yearsBack = 5) {
   return results;
 }
 
-const ALL_SEASONS = getRecentSeasons(1);
+const ALL_SEASONS = getRecentSeasons(5);
 
 // ====================== HELPERS ======================
 function toMetaPreview(anime) {
