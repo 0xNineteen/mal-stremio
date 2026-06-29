@@ -1,7 +1,7 @@
 {
   "name": "mal-stremio",
-  "version": "1.0.0",
-  "description": "Stremio addon that shows the top seasonal anime from MyAnimeList (via Jikan API)",
+  "version": "2.0.0",
+  "description": "Stremio addon for MAL seasonal top-rated anime and personal anime lists",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -15,7 +15,8 @@
     "myanimelist",
     "mal",
     "seasonal",
-    "jikan"
+    "animelist",
+    "userlist"
   ],
   "author": "",
   "license": "MIT",

@@ -23,3 +23,6 @@ Thumbs.db
 .cache/
 dist/
 build/
+
+# Per-user list caches (generated at runtime)
+data/user-lists/

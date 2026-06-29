@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Dragon Ball">
+  <defs>
+    <radialGradient id="ball" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#ff9a2e"/>
+      <stop offset="55%" stop-color="#ff6a00"/>
+      <stop offset="100%" stop-color="#c44b00"/>
+    </radialGradient>
+  </defs>
+  <circle cx="60" cy="60" r="54" fill="url(#ball)" stroke="#7a2500" stroke-width="3"/>
+  <circle cx="42" cy="38" r="10" fill="rgba(255,255,255,0.35)"/>
+  <g fill="#c62828" stroke="#7f0000" stroke-width="2">
+    <polygon points="60,18 64,28 74,28 66,35 69,45 60,39 51,45 54,35 46,28 56,28"/>
+    <polygon points="88,42 91,50 99,50 93,56 95,64 88,59 81,64 83,56 77,50 85,50"/>
+    <polygon points="88,78 91,86 99,86 93,92 95,100 88,95 81,100 83,92 77,86 85,86"/>
+    <polygon points="60,98 64,88 74,88 66,81 69,71 60,77 51,71 54,81 46,88 56,88"/>
+  </g>
+</svg>
