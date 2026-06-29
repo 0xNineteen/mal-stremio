@@ -9,7 +9,9 @@ const {
   buildSeasonalCatalogs,
   prepareSeasonalCatalog,
   findInSeasonCache,
-  preloadAllSeasons
+  preloadAllSeasons,
+  scheduleCurrentSeasonRefresh,
+  getCurrentSeason
 } = require('./lib/seasonal');
 const {
   LIST_STATUSES,
@@ -289,7 +291,11 @@ const server = app.listen(PORT, () => {
   console.log(`  IMDb cache: ${Object.keys(cache).length} title(s) pre-resolved`);
   const seasonalCount = buildSeasonalCatalogs().length;
   const userCount = buildUserListCatalogs().length;
+  const current = getCurrentSeason();
   console.log(`  Catalogs: ${seasonalCount} seasonal (+ ${userCount} personal when username configured)`);
+  if (IS_PRODUCTION && current) {
+    console.log(`  Current season (${current.label}): rescraped weekly for updated ratings`);
+  }
   console.log('');
   console.log('  Install seasonal catalogs without a username, or add your MAL username');
   console.log('  on the configure page for personal list catalogs at the top. List must be public.');
@@ -298,6 +304,7 @@ const server = app.listen(PORT, () => {
   (async () => {
     await preloadAllUserLists();
     await preloadAllSeasons();
+    scheduleCurrentSeasonRefresh();
   })();
 });
 
