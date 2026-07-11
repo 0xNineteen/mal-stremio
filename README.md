@@ -1,3 +1,5 @@
+Note: just use [AIOStreamsMetadata](https://aiometadata.elfhosted.com/configure/) instead (found it after building this ... XD)
+
 # MAL Seasonal Anime — Stremio Addon
 
 A lightweight Stremio addon that brings the **highest-rated seasonal anime** directly into your Stremio library using data from MyAnimeList.
