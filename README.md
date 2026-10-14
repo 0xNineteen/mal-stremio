@@ -1,10 +1,8 @@
-Note: just use [AIOStreamsMetadata](https://aiometadata.elfhosted.com/configure/) instead (found it after building this ... XD)
-
 # MAL Seasonal Anime — Stremio Addon
 
 A Stremio addon for the highest-rated seasonal anime from MyAnimeList. Every catalog poster shows the **MAL score** beside the IMDb rating.
 
-Stremio's built-in badge is IMDb only, and a catalog tile is just the poster and the title. This addon paints both scores onto the MyAnimeList poster: a yellow **IMDb** pill when a rating exists, and a blue **MAL** pill with the community score (for example `MAL 8.81`). [Anime Catalogs](https://github.com/jaruba/stremio-anime-catalogs) covers many more lists, but its posters are ordinary Cinemeta art with only the IMDb badge. The MAL score on the poster is the reason to use this addon.
+[AIOMetadata](https://aiometadata.elfhosted.com/configure/) is the broader metadata addon: more catalogs and more sources. A Stremio catalog tile is still only the poster and the title, and the built-in badge is IMDb. This addon paints both scores onto the MyAnimeList poster: a yellow **IMDb** pill when a rating exists, and a blue **MAL** pill with the community score (for example `MAL 8.81`). That MAL score on the poster is the reason to use this addon.
 
 This addon provides catalogs and metadata only. Pair it with Torrentio (or similar) for streams.
 
@@ -146,7 +144,7 @@ We scrape the public seasonal pages directly (instead of the official MAL API) b
 - On Stremio Web, do a hard refresh (Ctrl/Cmd + Shift + R) after re-adding.
 
 **Want more catalogs?**
-[Anime Catalogs](https://github.com/jaruba/stremio-anime-catalogs) is the broader addon (genres, studios, all-time lists, AniList, Kitsu). This one is for seeing the MAL score on the poster, next to IMDb, while browsing a season or your own list.
+[AIOMetadata](https://aiometadata.elfhosted.com/configure/) covers genres, studios, all-time lists, and other sources. This addon is for seeing the MAL score on the poster, next to IMDb, while browsing a season or your own list.
 
 **Scraping issues or blocked requests?**
 - The scraper adds delays (~4.5s between season requests) to be respectful to MAL.
