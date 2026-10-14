@@ -26,3 +26,7 @@ build/
 
 # Per-user list caches (generated at runtime)
 data/user-lists/
+
+# Generated rating posters and Cinemeta rating lookups
+data/posters/
+data/imdb-ratings.json

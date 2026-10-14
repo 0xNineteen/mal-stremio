@@ -1,12 +1,13 @@
 {
   "name": "mal-stremio",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "description": "Stremio addon for MAL seasonal top-rated anime and personal anime lists",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "echo \"No tests specified\" && exit 0",
+    "deploy:oracle": "bash deploy/oracle/install.sh"
   },
   "keywords": [
     "stremio",
@@ -24,6 +25,7 @@
   "dependencies": {
     "cheerio": "^1.2.0",
     "name-to-imdb": "^2.3.2",
+    "sharp": "^0.35.5",
     "stremio-addon-sdk": "^1.6.10",
     "undici": "5.28.4"
   },

@@ -4,8 +4,8 @@ const cors = require('cors');
 const { addonBuilder, getRouter } = require('stremio-addon-sdk');
 const configurePage = require('./lib/configure-page');
 const {
-  ALL_SEASONS,
   getSeasonData,
+  seasonFromGenre,
   buildSeasonalCatalogs,
   prepareSeasonalCatalog,
   findInSeasonCache,
@@ -14,15 +14,17 @@ const {
   getCurrentSeason
 } = require('./lib/seasonal');
 const {
-  LIST_STATUSES,
   getListData,
   getUsersToPreload,
   preloadAllUserLists,
+  listStatusFromGenre,
   buildUserListCatalogs,
   prepareUserCatalog,
   findInUserCache
 } = require('./lib/user-lists');
 const { fetchMalPageInfo, searchForImdbId, loadImdbCache } = require('./lib/imdb');
+const { buildPosterPath, isAllowedImageUrl, renderRatedPoster } = require('./lib/poster');
+const { formatScore } = require('./lib/badge');
 
 // ====================== CONFIG ======================
 const PORT = process.env.PORT || 3001;
@@ -75,37 +77,67 @@ function buildManifestForConfig(config = {}) {
   };
 }
 
-function toMetaPreview(anime) {
+function sourcePoster(anime) {
+  const raw = anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url || '';
+
+  try {
+    const url = new URL(raw);
+    const pathName = url.pathname;
+    const isMalPoster = url.protocol === 'https:'
+      && (url.hostname === 'cdn.myanimelist.net' || url.hostname === 'myanimelist.net')
+      && pathName.includes('/images/anime/')
+      && !pathName.endsWith('.gif');
+    return isMalPoster ? url.toString() : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function malLink(anime) {
+  const malUrl = anime.url || (anime.mal_id ? `https://myanimelist.net/anime/${anime.mal_id}` : null);
+  if (!malUrl) return null;
+
+  const score = formatScore(anime.score);
+  return {
+    name: score || 'MyAnimeList',
+    category: 'MAL',
+    url: malUrl
+  };
+}
+
+function toMetaPreview(anime, catalogGenre) {
   const name = anime.title_english || anime.title || 'Unknown Title';
-  const poster = anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url;
+  const artwork = sourcePoster(anime);
   const year = anime.year || (anime.aired?.from ? new Date(anime.aired.from).getFullYear() : null);
   const imdbId = anime.imdb_id;
 
   if (!imdbId) return null;
 
+  const ratedPoster = buildPosterPath(imdbId, anime.score, artwork);
+  const link = malLink(anime);
+  const genres = (anime.genres || []).map((g) => g.name).filter(Boolean);
+  if (catalogGenre && !genres.some((g) => g.toLowerCase() === catalogGenre.toLowerCase())) {
+    genres.unshift(catalogGenre);
+  }
   const meta = {
     id: imdbId,
     type: 'series',
     name,
-    poster,
-    background: poster,
+    poster: ratedPoster || artwork || undefined,
+    background: artwork || undefined,
     description: anime.synopsis
       ? anime.synopsis.slice(0, 280) + (anime.synopsis.length > 280 ? '...' : '')
       : '',
-    genres: (anime.genres || []).map(g => g.name),
+    genres,
     year: year ? String(year) : undefined,
-    releaseInfo: year ? String(year) : undefined,
-    imdbRating: anime.score ? anime.score.toFixed(1) : undefined,
+    releaseInfo: catalogGenre || (year ? String(year) : undefined),
     runtime: anime.duration || undefined,
     country: 'JP',
     status: anime.status || 'Released',
     language: 'ja'
   };
 
-  const malUrl = anime.url || (anime.mal_id ? `https://myanimelist.net/anime/${anime.mal_id}` : null);
-  if (malUrl) {
-    meta.links = [{ name: 'MyAnimeList', category: 'general', url: malUrl }];
-  }
+  if (link) meta.links = [link];
 
   return meta;
 }
@@ -113,19 +145,20 @@ function toMetaPreview(anime) {
 function enrichMeta(meta, found) {
   meta.country = 'JP';
   meta.language = 'ja';
-  meta.links = [
-    {
-      name: 'MyAnimeList',
-      category: 'general',
-      url: found.url || `https://myanimelist.net/anime/${found.mal_id}`
-    }
-  ];
+  const link = malLink(found);
+  if (link) meta.links = [link];
   return meta;
+}
+
+function publicBase(req) {
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || `127.0.0.1:${PORT}`).split(',')[0].trim();
+  return `${proto}://${host}`;
 }
 
 const manifestBase = {
   id: 'com.malstremio.anime',
-  version: '2.0.0',
+  version: '2.0.2',
   name: 'MAL Anime',
   description: 'Top-rated seasonal anime from MyAnimeList plus your personal lists (Watching, Completed, On Hold, Plan to Watch). Uses raw tt (IMDb) IDs resolved from MAL external links and name-to-imdb.',
   background: '/goku-backdrop.jpg',
@@ -162,31 +195,31 @@ builder.defineCatalogHandler(async ({ type, id, extra = {}, config }) => {
   const search = extra.search || '';
 
   try {
-    if (LIST_STATUSES[id]) {
+    if (id === 'my-mal') {
       const username = getUsername(config);
       if (!username) return { metas: [] };
 
-      const rawData = await getListData(username, id);
+      const status = listStatusFromGenre(extra.genre);
+      if (!status) return { metas: [] };
+      const rawData = await getListData(username, status);
       const page = prepareUserCatalog(rawData, search, skip);
-      return { metas: page.map(toMetaPreview).filter(Boolean) };
+      return { metas: page.map((anime) => toMetaPreview(anime)).filter(Boolean) };
     }
 
     let rawData = [];
+    let seasonLabel;
 
-    if (id === 'seasonal-score') {
-      const current = ALL_SEASONS[0];
-      rawData = await getSeasonData(current.year, current.season, 'rated');
-    } else if (id.startsWith('season-')) {
-      const keyPart = id.replace('season-', '');
-      const [yearStr, season] = keyPart.split('-');
-      const year = parseInt(yearStr, 10);
-      if (year && season) {
-        rawData = await getSeasonData(year, season, 'rated');
+    if (id === 'mal-top-rated') {
+      const season = seasonFromGenre(extra.genre);
+      seasonLabel = season?.label;
+      console.log(`[catalog] mal-top-rated genre=${JSON.stringify(extra.genre)} -> ${seasonLabel || 'none'}`);
+      if (season) {
+        rawData = await getSeasonData(season.year, season.season, 'rated');
       }
     }
 
     const page = prepareSeasonalCatalog(rawData, id, search, skip, 100);
-    return { metas: page.map(toMetaPreview).filter(Boolean) };
+    return { metas: page.map((anime) => toMetaPreview(anime, seasonLabel)).filter(Boolean) };
   } catch (err) {
     console.error('Catalog handler error:', err.message);
     return { metas: [] };
@@ -231,10 +264,67 @@ const app = express();
 const addonInterface = builder.getInterface();
 
 app.use(cors());
+app.set('trust proxy', true);
 app.use((_, res, next) => {
   if (!res.getHeader('Cache-Control')) {
     res.setHeader('Cache-Control', `max-age=${HTTP_CACHE_MAX_AGE}, public`);
   }
+  next();
+});
+
+app.get('/poster/:imdbFile', async (req, res) => {
+  const match = String(req.params.imdbFile || '').match(/^(tt\d+)\.jpg$/);
+  const src = String(req.query.src || '');
+
+  if (!match) {
+    res.status(404).end();
+    return;
+  }
+
+  try {
+    const jpeg = await renderRatedPoster({
+      imdbId: match[1],
+      score: req.query.score,
+      src
+    });
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=604800');
+    res.end(jpeg);
+  } catch (err) {
+    console.warn(`[poster] ${match[1]}: ${err.message}`);
+    if (isAllowedImageUrl(src)) {
+      res.redirect(src);
+      return;
+    }
+    res.status(404).end();
+  }
+});
+
+// Stremio requires absolute poster URLs. Catalog responses are built without
+// the request host, so rewrite the relative /poster paths here.
+app.use((req, res, next) => {
+  if (!/\/(catalog|meta)\//.test(req.path)) {
+    next();
+    return;
+  }
+
+  const origEnd = res.end;
+  res.end = function (chunk, encoding, cb) {
+    if (typeof encoding === 'function') {
+      cb = encoding;
+      encoding = undefined;
+    }
+
+    if (chunk) {
+      const text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
+      if (text.includes('"/poster/')) {
+        chunk = text.replaceAll('"/poster/', `"${publicBase(req)}/poster/`);
+      }
+    }
+
+    return origEnd.call(this, chunk, encoding, cb);
+  };
+
   next();
 });
 

@@ -1,0 +1,29 @@
+#cloud-config
+# Paste this entire file into Oracle Cloud → Create Instance → "Paste cloud-init script"
+#
+# Optional: set your MAL username(s) below before creating the VM.
+package_update: true
+package_upgrade: false
+
+packages:
+  - git
+  - curl
+  - ca-certificates
+
+write_files:
+  - path: /etc/default/mal-stremio
+    permissions: "0644"
+    content: |
+      REPO_URL=https://github.com/0xNineteen/mal-stremio.git
+      MAL_USERNAMES=
+      DOMAIN=
+
+runcmd:
+  - git clone --depth 1 https://github.com/0xNineteen/mal-stremio.git /opt/mal-stremio
+  - bash -lc 'set -a; source /etc/default/mal-stremio; set +a; bash /opt/mal-stremio/deploy/oracle/install.sh --skip-clone'
+  - bash -lc 'tail -30 /var/log/mal-stremio-install.log > /home/ubuntu/mal-stremio-ready.txt; chown ubuntu:ubuntu /home/ubuntu/mal-stremio-ready.txt'
+
+final_message: |
+  mal-stremio install started. SSH in and run:
+    cat ~/mal-stremio-ready.txt
+  Open Oracle ingress ports 80 and 443 if the site is not reachable.

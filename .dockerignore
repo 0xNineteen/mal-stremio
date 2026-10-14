@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.*
+!.env.example
+data/user-lists
+*.log
+.DS_Store
+.vscode
+.idea
+deploy/oracle/Caddyfile.runtime

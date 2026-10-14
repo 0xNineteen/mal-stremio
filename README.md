@@ -2,7 +2,9 @@ Note: just use [AIOStreamsMetadata](https://aiometadata.elfhosted.com/configure/
 
 # MAL Seasonal Anime — Stremio Addon
 
-A lightweight Stremio addon that brings the **highest-rated seasonal anime** directly into your Stremio library using data from MyAnimeList.
+A Stremio addon for the highest-rated seasonal anime from MyAnimeList. Every catalog poster shows the **MAL score** beside the IMDb rating.
+
+Stremio's built-in badge is IMDb only, and a catalog tile is just the poster and the title. This addon paints both scores onto the MyAnimeList poster: a yellow **IMDb** pill when a rating exists, and a blue **MAL** pill with the community score (for example `MAL 8.81`). [Anime Catalogs](https://github.com/jaruba/stremio-anime-catalogs) covers many more lists, but its posters are ordinary Cinemeta art with only the IMDb badge. The MAL score on the poster is the reason to use this addon.
 
 This addon provides catalogs and metadata only. Pair it with Torrentio (or similar) for streams.
 
@@ -12,12 +14,10 @@ This addon provides catalogs and metadata only. Pair it with Torrentio (or simil
 
 ## Features
 
-- Catalogs named **MAL Top Rated - {Season} {Year}**
-- Includes the current season + previous seasons going back ~5 years
-  - Examples: "Spring 2025", "Winter 2024", "Fall 2021", etc.
-  - ~22 catalogs total
-  - All support search + pagination
-- Rich metadata pages (synopsis, genres, MAL score, trailers when available, direct MAL link)
+- **MAL rating on the poster**, next to IMDb. The score is drawn on the image, so it shows up in the catalog grid where Stremio has no second rating slot.
+- One series catalog, **MAL Top Rated**. The season is the Genre filter (Summer 2026, Spring 2026, and so on): the current season plus earlier seasons going back about 5 years.
+- **My MAL**, after you set a public MyAnimeList username: Watching, Watched, On Hold, and Plan to Watch, also as Genre filters. Those posters carry the same ratings.
+- Search and pagination on both catalogs
 - Polite rate limiting + retries + on-demand loading for older seasons
 - Uses only raw `tt` (IMDb) IDs — e.g. `tt1234567` (idPrefixes: ["tt"])
 - IMDb IDs are resolved live by scraping each anime's MyAnimeList page and extracting the link from the "External Links" section.
@@ -41,33 +41,43 @@ Then open Stremio → Add-ons → **Add addon** and paste:
 http://127.0.0.1:3001/manifest.json
 ```
 
-### Production (Recommended)
+### Production — Oracle Cloud (free, always-on)
 
-Deploy with one click on **Railway**, **Render**, or **Fly.io**:
+Best free option: Oracle **Always Free** VM + Docker. HTTPS is automatic (custom domain or `{your-ip}.sslip.io`).
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/yourname/mal-stremio)
+**One-click (cloud-init):**
 
-Or manually:
+1. Oracle Console → Create Instance → Ubuntu 22.04/24.04 (Ampere `VM.Standard.A1.Flex` or AMD Micro)
+2. Paste the contents of [`deploy/oracle/cloud-init.yaml`](deploy/oracle/cloud-init.yaml) into **Cloud init script**
+3. Optional: edit `MAL_USERNAMES=` in that file before pasting
+4. Create the VM, then open **ingress ports 80 and 443** in your VCN Security List
+5. SSH in after ~5 min: `cat ~/mal-stremio-ready.txt` for your Stremio URL
 
-1. Push this repo to GitHub
-2. Connect to Railway / Render / any Node host
-3. Set start command: `npm start`
-4. Use the generated public URL + `/manifest.json`
+**One-click (existing VM):**
 
-Example public manifest URL:
+```bash
+curl -fsSL https://raw.githubusercontent.com/0xNineteen/mal-stremio/main/deploy/oracle/install.sh | sudo bash -s -- --username your_mal_name
 ```
-https://your-app.up.railway.app/manifest.json
+
+With your own domain:
+
+```bash
+sudo bash deploy/oracle/install.sh --domain addon.example.com --username your_mal_name
 ```
+
+Data (IMDb cache, user lists) persists in the Docker volume across restarts.
+
+### Other hosts
+
+Render, Fly.io, etc. also work — set start command `npm start` and `NODE_ENV=production`. Ephemeral disk means caches rebuild on redeploy.
 
 ## How to Use
 
 1. Install the addon using the manifest URL.
-2. Go to **Discover** (or **Board**).
-3. You will see catalogs named:
-   - **MAL Top Rated - Spring 2026** (current season)
-   - **MAL Top Rated - Winter 2025**, **MAL Top Rated - Fall 2025**, etc. for previous seasons
-4. Search inside the rows using the search bar.
-5. Click any title to see full details (synopsis, genres, trailer, MAL link).
+2. Go to **Discover**.
+3. Choose type **Series**, catalog **MAL Top Rated**, then the season in the **Genre** filter.
+4. The MAL score is on the poster (blue), next to IMDb (yellow) when that rating exists. Titles stay the show name.
+5. Optional: open the configure page and set your public MAL username for the **My MAL** catalog.
 
 ### Streams (Torrentio Recommended)
 
@@ -136,7 +146,7 @@ We scrape the public seasonal pages directly (instead of the official MAL API) b
 - On Stremio Web, do a hard refresh (Ctrl/Cmd + Shift + R) after re-adding.
 
 **Want more catalogs?**
-This addon is intentionally focused only on the highest-rated titles from each seasonal page. For many additional MAL/AniList catalogs (genres, studios, top all-time, etc.) consider pairing it with the excellent [Anime Catalogs](https://github.com/jaruba/stremio-anime-catalogs) community addon.
+[Anime Catalogs](https://github.com/jaruba/stremio-anime-catalogs) is the broader addon (genres, studios, all-time lists, AniList, Kitsu). This one is for seeing the MAL score on the poster, next to IMDb, while browsing a season or your own list.
 
 **Scraping issues or blocked requests?**
 - The scraper adds delays (~4.5s between season requests) to be respectful to MAL.
@@ -155,4 +165,4 @@ MIT
 
 ---
 
-Made for anime fans who want the current season's best shows in one place inside Stremio.
+Made for anime fans who want the MAL score on the poster, next to IMDb, for the current season's best shows.
